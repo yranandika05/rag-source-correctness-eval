@@ -1,0 +1,5 @@
+haystack-ai==2.30.0
+pydantic>=2.7,<3
+sentence-transformers==5.5.1
+pandas==3.0.3
+tqdm==4.67.1

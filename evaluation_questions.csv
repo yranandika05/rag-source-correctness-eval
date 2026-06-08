@@ -1,0 +1,5 @@
+question_id,question,intended_source,category
+1,How do you create a new repository in GitHub?,GitHub,repository management
+2,What is a merge request in GitLab?,GitLab,merge workflow
+3,How do you add collaborators on GitHub?,GitHub,access control
+4,How can I configure CI/CD pipelines in GitLab?,GitLab,ci/cd
