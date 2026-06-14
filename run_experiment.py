@@ -3,6 +3,13 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from cache_utils import (
+    build_cache_key,
+    cache_exists,
+    cache_path_for_key,
+    load_cached_documents,
+    save_cached_documents,
+)
 from evaluate import (
     compute_ambiguous_source_report,
     compute_source_metrics,
@@ -43,6 +50,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Optional cap on loaded files per source for small early experiments.",
+    )
+    parser.add_argument(
+        "--rebuild-index",
+        action="store_true",
+        help="Ignore any existing local index cache and rebuild chunks/embeddings from raw docs.",
     )
     args = parser.parse_args()
     if args.top_k < 1:
@@ -95,21 +107,43 @@ def serialize_hit(question: dict, method: str, rank: int, document) -> dict:
 def main() -> None:
     args = parse_args()
 
-    print("Loading local documentation files...")
-    documents = load_local_documents(DATA_DIRS, max_files_per_source=args.max_files_per_source)
-    if not documents:
-        raise SystemExit("No documents found. Add .md, .mdx, or .txt files under data/github_docs/ and data/gitlab_docs/.")
-    print(f"Loaded {len(documents)} source documents.")
-
-    print("Creating Haystack InMemoryDocumentStore and running indexing pipeline...")
-    document_store = create_document_store()
-    index_documents(
-        document_store=document_store,
-        documents=documents,
+    cache_key = build_cache_key(
         embedding_model=args.embedding_model,
         split_length=args.split_length,
         split_overlap=args.split_overlap,
+        max_files_per_source=args.max_files_per_source,
     )
+    cache_path = cache_path_for_key(cache_key)
+
+    print("Creating Haystack InMemoryDocumentStore...")
+    document_store = create_document_store()
+
+    if cache_exists(cache_path) and not args.rebuild_index:
+        print(f"Loading cached chunks and embeddings from {cache_path}...")
+        cached_documents = load_cached_documents(cache_path)
+        document_store.write_documents(cached_documents)
+    else:
+        if args.rebuild_index and cache_exists(cache_path):
+            print(f"Ignoring existing cache because --rebuild-index was set: {cache_path}")
+
+        print("Loading local documentation files...")
+        documents = load_local_documents(DATA_DIRS, max_files_per_source=args.max_files_per_source)
+        if not documents:
+            raise SystemExit("No documents found. Add .md, .mdx, or .txt files under data/github_docs/ and data/gitlab_docs/.")
+        print(f"Loaded {len(documents)} source documents.")
+
+        print("Running indexing pipeline and computing document embeddings...")
+        index_documents(
+            document_store=document_store,
+            documents=documents,
+            embedding_model=args.embedding_model,
+            split_length=args.split_length,
+            split_overlap=args.split_overlap,
+        )
+        indexed_documents = document_store.filter_documents()
+        save_cached_documents(cache_path, indexed_documents)
+        print(f"Saved indexed chunks and embeddings to {cache_path}.")
+
     print(f"Indexed {document_store.count_documents()} chunks.")
 
     print("Loading evaluation questions...")

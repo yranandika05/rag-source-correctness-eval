@@ -107,7 +107,8 @@ python run_experiment.py \
   --split-length 250 \
   --split-overlap 50 \
   --max-files-per-source 100 \
-  --embedding-model sentence-transformers/all-MiniLM-L6-v2
+  --embedding-model sentence-transformers/all-MiniLM-L6-v2 \
+  --rebuild-index
 ```
 
 The script writes:
@@ -115,6 +116,34 @@ The script writes:
 - `results/retrieval_results.csv`
 - `results/source_metrics.csv`
 - `results/ambiguous_source_report.csv`
+
+## Local Index Cache
+
+Raw documentation files are local experiment data and are ignored by Git:
+
+- `data/github_docs/`
+- `data/gitlab_docs/`
+
+After indexing, chunked Haystack `Document` objects are cached under:
+
+```text
+storage/
+```
+
+The cache stores chunk text, metadata, Haystack split metadata, and embeddings. `storage/` is ignored by Git because cached embeddings are generated artifacts and can become large.
+
+Cache filenames depend on indexing settings:
+
+- embedding model
+- split length
+- split overlap
+- `max_files_per_source`
+
+Use `--rebuild-index` when raw documents, chunking settings, file limits, or the embedding model change:
+
+```bash
+python run_experiment.py --rebuild-index
+```
 
 ## Retrieval Methods
 
