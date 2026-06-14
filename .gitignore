@@ -1,7 +1,14 @@
+# Python
 .venv/
 __pycache__/
 *.py[cod]
 
+# Local documentation data
+data/github_docs/
+data/gitlab_docs/
+data/raw/
+
+data/processed/
 results/
 .pytest_cache/
 .mypy_cache/

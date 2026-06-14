@@ -64,7 +64,7 @@ As of June 8, 2026, PyPI lists `haystack-ai` 2.30.0 as a stable release publishe
 
 ## Data
 
-Add `.md` or `.txt` files under:
+Add `.md`, `.mdx`, or `.txt` files under:
 
 ```text
 data/github_docs/
@@ -106,6 +106,7 @@ python run_experiment.py \
   --top-k 5 \
   --split-length 250 \
   --split-overlap 50 \
+  --max-files-per-source 100 \
   --embedding-model sentence-transformers/all-MiniLM-L6-v2
 ```
 
@@ -113,6 +114,7 @@ The script writes:
 
 - `results/retrieval_results.csv`
 - `results/source_metrics.csv`
+- `results/ambiguous_source_report.csv`
 
 ## Retrieval Methods
 
@@ -123,6 +125,8 @@ The script writes:
 
 ## Metrics
 
+Rows whose `intended_source` is `Ambiguous` are excluded from source-correctness metrics and reported separately.
+
 `Source Accuracy@k` answers:
 
 > For each question, did at least one of the top-k retrieved chunks come from the intended source?
@@ -132,6 +136,8 @@ The script writes:
 > Across all top-k retrieved chunks, what fraction came from the wrong source?
 
 These are intentionally source-level metrics. They do not yet evaluate whether the exact paragraph is correct, only whether retrieval points to the intended documentation source.
+
+`ambiguous_source_report.csv` reports the retrieved-source distribution for intentionally ambiguous queries by method and `k`.
 
 ## Why This Design
 

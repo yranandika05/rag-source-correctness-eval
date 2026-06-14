@@ -107,6 +107,17 @@ def metadata_aware_retrieve(
     query: str,
     top_k: int = 5,
 ) -> list[Document]:
+    """Run a source-filtered hybrid retrieval upper-bound variant.
+
+    This method filters, not merely prioritizes. If the query explicitly names
+    GitHub or GitLab, retrieval is restricted to chunks whose `meta.source`
+    matches that source. This is useful as an upper-bound comparison: it shows
+    how retrieval behaves when source intent is detected and enforced.
+
+    If no explicit source mention is detected, it falls back to unfiltered
+    hybrid retrieval. The returned list contains up to `top_k` documents,
+    depending on how many matching chunks exist.
+    """
     explicit_source = detect_explicit_source(query)
     filters = source_filter(explicit_source) if explicit_source else None
     return hybrid_retrieve(

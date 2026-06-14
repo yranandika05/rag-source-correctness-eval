@@ -3,7 +3,12 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from evaluate import compute_source_metrics, load_evaluation_questions, save_results
+from evaluate import (
+    compute_ambiguous_source_report,
+    compute_source_metrics,
+    load_evaluation_questions,
+    save_results,
+)
 from indexing_pipeline import create_document_store, index_documents
 from load_documents import load_local_documents
 from retrievers import (
@@ -33,7 +38,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=TOP_K)
     parser.add_argument("--split-length", type=int, default=SPLIT_LENGTH)
     parser.add_argument("--split-overlap", type=int, default=SPLIT_OVERLAP)
-    return parser.parse_args()
+    parser.add_argument(
+        "--max-files-per-source",
+        type=int,
+        default=None,
+        help="Optional cap on loaded files per source for small early experiments.",
+    )
+    args = parser.parse_args()
+    if args.top_k < 1:
+        parser.error("--top-k must be at least 1")
+    if args.split_length < 1:
+        parser.error("--split-length must be at least 1")
+    if args.split_overlap < 0:
+        parser.error("--split-overlap must be 0 or greater")
+    if args.split_overlap >= args.split_length:
+        parser.error("--split-overlap must be smaller than --split-length")
+    if args.max_files_per_source is not None and args.max_files_per_source < 1:
+        parser.error("--max-files-per-source must be at least 1 when provided")
+    return args
 
 
 def build_method_map(bm25_pipeline, dense_pipeline, top_k: int) -> dict:
@@ -74,9 +96,9 @@ def main() -> None:
     args = parse_args()
 
     print("Loading local documentation files...")
-    documents = load_local_documents(DATA_DIRS)
+    documents = load_local_documents(DATA_DIRS, max_files_per_source=args.max_files_per_source)
     if not documents:
-        raise SystemExit("No documents found. Add .md or .txt files under data/github_docs/ and data/gitlab_docs/.")
+        raise SystemExit("No documents found. Add .md, .mdx, or .txt files under data/github_docs/ and data/gitlab_docs/.")
     print(f"Loaded {len(documents)} source documents.")
 
     print("Creating Haystack InMemoryDocumentStore and running indexing pipeline...")
@@ -116,8 +138,20 @@ def main() -> None:
     metrics.to_csv(metrics_path, index=False)
 
     print(f"Saved source metrics to {metrics_path}")
-    print("\nSource evaluation metrics")
-    print(metrics.to_string(index=False))
+    if not metrics.empty:
+        print("\nSource evaluation metrics")
+        print(metrics.to_string(index=False))
+    else:
+        print("No non-ambiguous source metrics were computed.")
+
+    ambiguous_report = compute_ambiguous_source_report(args.results_path, top_k=args.top_k)
+    ambiguous_report_path = Path(args.results_path).with_name("ambiguous_source_report.csv")
+    ambiguous_report.to_csv(ambiguous_report_path, index=False)
+
+    print(f"Saved ambiguous source report to {ambiguous_report_path}")
+    if not ambiguous_report.empty:
+        print("\nAmbiguous query retrieved-source distribution")
+        print(ambiguous_report.to_string(index=False))
 
 
 if __name__ == "__main__":

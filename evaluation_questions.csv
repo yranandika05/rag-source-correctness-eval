@@ -1,5 +1,17 @@
 question_id,question,intended_source,category
-1,How do you create a new repository in GitHub?,GitHub,repository management
-2,What is a merge request in GitLab?,GitLab,merge workflow
-3,How do you add collaborators on GitHub?,GitHub,access control
-4,How can I configure CI/CD pipelines in GitLab?,GitLab,ci/cd
+1,How do you create a new repository in GitHub?,GitHub,explicit_source
+2,What is a merge request in GitLab?,GitLab,explicit_source
+3,How do you add collaborators on GitHub?,GitHub,explicit_source
+4,How can I configure CI/CD pipelines in GitLab?,GitLab,explicit_source
+5,Where do I invite users by GitHub username?,GitHub,source_specific_terminology
+6,Which platform uses a .gitlab-ci.yml file for pipeline configuration?,GitLab,source_specific_terminology
+7,Which documentation explains New repository creation?,GitHub,source_specific_terminology
+8,Which documentation describes reviewers approving proposed branch changes?,GitLab,source_specific_terminology
+9,How can I start a new hosted code project?,GitHub,paraphrased
+10,How do I request that changes from one branch be reviewed before merging?,GitLab,paraphrased
+11,How do I let another person access my project?,GitHub,paraphrased
+12,How do I define jobs that run after commits or schedules?,GitLab,paraphrased
+13,How do I create a new project or repository?,Ambiguous,ambiguous_cross_source
+14,How do I manage access for other users?,Ambiguous,ambiguous_cross_source
+15,How does code review before merging work?,Ambiguous,ambiguous_cross_source
+16,How are automated checks configured for a repository?,Ambiguous,ambiguous_cross_source
