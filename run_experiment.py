@@ -18,6 +18,13 @@ from evaluate import (
 )
 from indexing_pipeline import create_document_store, index_documents
 from load_documents import load_local_documents
+from reporting import (
+    create_run_directory,
+    generate_question_view_html,
+    generate_question_view_md,
+    save_config,
+    utc_timestamp,
+)
 from retrievers import (
     bm25_retrieve,
     build_bm25_pipeline,
@@ -28,7 +35,7 @@ from retrievers import (
 )
 
 
-DATA_DIRS = ["data/github_docs", "data/gitlab_docs"]
+DATA_DIRS = ["data/github_docs/content", "data/gitlab_docs/doc"]
 EVALUATION_PATH = "evaluation_questions.csv"
 RESULTS_PATH = "results/retrieval_results.csv"
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -45,6 +52,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=TOP_K)
     parser.add_argument("--split-length", type=int, default=SPLIT_LENGTH)
     parser.add_argument("--split-overlap", type=int, default=SPLIT_OVERLAP)
+    parser.add_argument(
+        "--run-name",
+        default=None,
+        help="Optional name for the run output folder under results/.",
+    )
+    parser.add_argument(
+        "--overwrite-run",
+        action="store_true",
+        help="Allow an existing named run folder to be overwritten.",
+    )
     parser.add_argument(
         "--max-files-per-source",
         type=int,
@@ -107,6 +124,20 @@ def serialize_hit(question: dict, method: str, rank: int, document) -> dict:
 def main() -> None:
     args = parse_args()
 
+    try:
+        run_dir = create_run_directory(run_name=args.run_name, overwrite=args.overwrite_run)
+    except FileExistsError as error:
+        raise SystemExit(str(error)) from error
+
+    results_path = run_dir / Path(args.results_path).name
+    metrics_path = run_dir / "source_metrics.csv"
+    ambiguous_report_path = run_dir / "ambiguous_source_report.csv"
+    config_path = run_dir / "config.json"
+    question_view_html_path = run_dir / "question_view.html"
+    question_view_md_path = run_dir / "question_view.md"
+
+    print(f"Writing run outputs to {run_dir}...")
+
     cache_key = build_cache_key(
         embedding_model=args.embedding_model,
         split_length=args.split_length,
@@ -117,6 +148,7 @@ def main() -> None:
 
     print("Creating Haystack InMemoryDocumentStore...")
     document_store = create_document_store()
+    loaded_source_document_count = None
 
     if cache_exists(cache_path) and not args.rebuild_index:
         print(f"Loading cached chunks and embeddings from {cache_path}...")
@@ -130,6 +162,7 @@ def main() -> None:
         documents = load_local_documents(DATA_DIRS, max_files_per_source=args.max_files_per_source)
         if not documents:
             raise SystemExit("No documents found. Add .md, .mdx, or .txt files under data/github_docs/ and data/gitlab_docs/.")
+        loaded_source_document_count = len(documents)
         print(f"Loaded {len(documents)} source documents.")
 
         print("Running indexing pipeline and computing document embeddings...")
@@ -144,7 +177,8 @@ def main() -> None:
         save_cached_documents(cache_path, indexed_documents)
         print(f"Saved indexed chunks and embeddings to {cache_path}.")
 
-    print(f"Indexed {document_store.count_documents()} chunks.")
+    indexed_chunk_count = document_store.count_documents()
+    print(f"Indexed {indexed_chunk_count} chunks.")
 
     print("Loading evaluation questions...")
     questions = load_evaluation_questions(args.evaluation_path)
@@ -164,11 +198,10 @@ def main() -> None:
             for rank, document in enumerate(hits, start=1):
                 rows.append(serialize_hit(question, method, rank, document))
 
-    save_results(args.results_path, rows)
-    print(f"Saved detailed retrieval results to {args.results_path}")
+    save_results(results_path, rows)
+    print(f"Saved detailed retrieval results to {results_path}")
 
-    metrics = compute_source_metrics(args.results_path, top_k=args.top_k)
-    metrics_path = Path(args.results_path).with_name("source_metrics.csv")
+    metrics = compute_source_metrics(results_path, top_k=args.top_k)
     metrics.to_csv(metrics_path, index=False)
 
     print(f"Saved source metrics to {metrics_path}")
@@ -178,14 +211,45 @@ def main() -> None:
     else:
         print("No non-ambiguous source metrics were computed.")
 
-    ambiguous_report = compute_ambiguous_source_report(args.results_path, top_k=args.top_k)
-    ambiguous_report_path = Path(args.results_path).with_name("ambiguous_source_report.csv")
+    ambiguous_report = compute_ambiguous_source_report(results_path, top_k=args.top_k)
     ambiguous_report.to_csv(ambiguous_report_path, index=False)
 
     print(f"Saved ambiguous source report to {ambiguous_report_path}")
     if not ambiguous_report.empty:
         print("\nAmbiguous query retrieved-source distribution")
         print(ambiguous_report.to_string(index=False))
+
+    generate_question_view_html(results_path, question_view_html_path, top_k=args.top_k)
+    generate_question_view_md(results_path, question_view_md_path, top_k=args.top_k)
+    print(f"Saved question-level HTML view to {question_view_html_path}")
+    print(f"Saved question-level Markdown view to {question_view_md_path}")
+
+    save_config(
+        config_path,
+        {
+            "run_name": run_dir.name,
+            "timestamp": utc_timestamp(),
+            "embedding_model": args.embedding_model,
+            "top_k": args.top_k,
+            "split_length": args.split_length,
+            "split_overlap": args.split_overlap,
+            "max_files_per_source": args.max_files_per_source,
+            "rebuild_index": args.rebuild_index,
+            "cache_path": str(cache_path),
+            "data_dirs": DATA_DIRS,
+            "number_loaded_source_documents": loaded_source_document_count,
+            "number_indexed_chunks": indexed_chunk_count,
+            "number_evaluation_questions": len(questions),
+            "outputs": {
+                "retrieval_results": str(results_path),
+                "source_metrics": str(metrics_path),
+                "ambiguous_source_report": str(ambiguous_report_path),
+                "question_view_html": str(question_view_html_path),
+                "question_view_md": str(question_view_md_path),
+            },
+        },
+    )
+    print(f"Saved run config to {config_path}")
 
 
 if __name__ == "__main__":

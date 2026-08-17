@@ -21,8 +21,8 @@ The prototype uses Haystack 2.30 for:
 
 The evaluated documentation collections are:
 
-- GitHub Docs in `data/github_docs/`
-- GitLab Docs in `data/gitlab_docs/`
+- GitHub Docs content in `data/github_docs/content/`
+- GitLab product docs in `data/gitlab_docs/doc/`
 
 Generation is intentionally optional because generation can hide retrieval errors. The retrieval output is saved as CSV so each retrieved chunk can be inspected directly.
 
@@ -38,6 +38,7 @@ This project focuses on source correctness rather than answer fluency. For examp
 - `indexing_pipeline.py` splits, embeds, and stores documents using a Haystack indexing pipeline.
 - `retrievers.py` contains BM25, dense, hybrid, and metadata-aware retrieval functions.
 - `evaluate.py` reads questions, saves detailed retrieval results, and computes source metrics.
+- `reporting.py` creates run folders, saves run config, and generates question-level analysis views.
 - `run_experiment.py` orchestrates the full experiment.
 - `evaluation_questions.csv` contains the evaluation set.
 - `results/` is created when you run the experiment and is ignored by Git.
@@ -67,8 +68,8 @@ As of June 8, 2026, PyPI lists `haystack-ai` 2.30.0 as a stable release publishe
 Add `.md`, `.mdx`, or `.txt` files under:
 
 ```text
-data/github_docs/
-data/gitlab_docs/
+data/github_docs/content/
+data/gitlab_docs/doc/
 ```
 
 Each file becomes a Haystack `Document` with metadata:
@@ -99,10 +100,38 @@ Example:
 python run_experiment.py
 ```
 
+By default, each experiment writes to a new run folder:
+
+```text
+results/run_001/
+results/run_002/
+results/run_003/
+```
+
+Use `--run-name` to choose a stable folder name:
+
+```bash
+python run_experiment.py --run-name baseline_40q
+```
+
+This writes outputs under:
+
+```text
+results/baseline_40q/
+```
+
+Existing named run folders are protected from accidental overwrites. Use
+`--overwrite-run` only when you intentionally want to replace files in that run:
+
+```bash
+python run_experiment.py --run-name baseline_40q --overwrite-run
+```
+
 Optional settings:
 
 ```bash
 python run_experiment.py \
+  --run-name baseline_top5 \
   --top-k 5 \
   --split-length 250 \
   --split-overlap 50 \
@@ -111,11 +140,28 @@ python run_experiment.py \
   --rebuild-index
 ```
 
-The script writes:
+Each run folder contains:
 
-- `results/retrieval_results.csv`
-- `results/source_metrics.csv`
-- `results/ambiguous_source_report.csv`
+- `retrieval_results.csv`: every retrieved chunk with method, rank, score, source, and preview.
+- `source_metrics.csv`: source-correctness metrics by method and `k`.
+- `ambiguous_source_report.csv`: retrieved-source distribution for ambiguous questions.
+- `config.json`: run settings, cache path, corpus stats, and output paths.
+- `question_view.html`: human-readable question-level analysis view.
+- `question_view.md`: Markdown version of the question-level view.
+
+Open `question_view.html` in a browser to inspect results grouped by question.
+For non-ambiguous questions, retrieved chunks from the wrong source are marked
+`WRONG SOURCE`. For intentionally ambiguous questions, the view reports source
+distribution instead of treating either source as wrong.
+
+To compare experiment runs, compare the `source_metrics.csv` files in their run
+folders, for example:
+
+```text
+results/run_001/source_metrics.csv
+results/run_002/source_metrics.csv
+results/baseline_40q/source_metrics.csv
+```
 
 ## Local Index Cache
 
