@@ -1,4 +1,5 @@
 import argparse
+from collections import Counter
 from pathlib import Path
 
 from tqdm import tqdm
@@ -12,7 +13,9 @@ from cache_utils import (
 )
 from evaluate import (
     compute_ambiguous_source_report,
+    compute_source_failures,
     compute_source_metrics,
+    compute_source_metrics_by_category,
     load_evaluation_questions,
     save_results,
 )
@@ -121,6 +124,20 @@ def serialize_hit(question: dict, method: str, rank: int, document) -> dict:
     }
 
 
+def count_by_source(documents: list) -> dict[str, int]:
+    """Count Haystack Documents by their source metadata."""
+    counts = Counter(document.meta.get("source", "Unknown") for document in documents)
+    return dict(sorted(counts.items()))
+
+
+def print_source_counts(label: str, counts: dict[str, int]) -> None:
+    total = sum(counts.values())
+    print(f"{label} by source:")
+    for source, count in counts.items():
+        print(f"  {source}: {count}")
+    print(f"  Total: {total}")
+
+
 def main() -> None:
     args = parse_args()
 
@@ -131,6 +148,8 @@ def main() -> None:
 
     results_path = run_dir / Path(args.results_path).name
     metrics_path = run_dir / "source_metrics.csv"
+    source_failures_path = run_dir / "source_failures.csv"
+    metrics_by_category_path = run_dir / "source_metrics_by_category.csv"
     ambiguous_report_path = run_dir / "ambiguous_source_report.csv"
     config_path = run_dir / "config.json"
     question_view_html_path = run_dir / "question_view.html"
@@ -149,6 +168,7 @@ def main() -> None:
     print("Creating Haystack InMemoryDocumentStore...")
     document_store = create_document_store()
     loaded_source_document_count = None
+    documents_by_source = None
 
     if cache_exists(cache_path) and not args.rebuild_index:
         print(f"Loading cached chunks and embeddings from {cache_path}...")
@@ -163,7 +183,8 @@ def main() -> None:
         if not documents:
             raise SystemExit("No documents found. Add .md, .mdx, or .txt files under data/github_docs/ and data/gitlab_docs/.")
         loaded_source_document_count = len(documents)
-        print(f"Loaded {len(documents)} source documents.")
+        documents_by_source = count_by_source(documents)
+        print_source_counts("Loaded source documents", documents_by_source)
 
         print("Running indexing pipeline and computing document embeddings...")
         index_documents(
@@ -177,8 +198,10 @@ def main() -> None:
         save_cached_documents(cache_path, indexed_documents)
         print(f"Saved indexed chunks and embeddings to {cache_path}.")
 
-    indexed_chunk_count = document_store.count_documents()
-    print(f"Indexed {indexed_chunk_count} chunks.")
+    indexed_documents = document_store.filter_documents()
+    chunks_by_source = count_by_source(indexed_documents)
+    indexed_chunk_count = sum(chunks_by_source.values())
+    print_source_counts("Indexed chunks", chunks_by_source)
 
     print("Loading evaluation questions...")
     questions = load_evaluation_questions(args.evaluation_path)
@@ -211,6 +234,14 @@ def main() -> None:
     else:
         print("No non-ambiguous source metrics were computed.")
 
+    source_failures = compute_source_failures(results_path, top_k=args.top_k)
+    source_failures.to_csv(source_failures_path, index=False)
+    print(f"Saved source failures to {source_failures_path}")
+
+    metrics_by_category = compute_source_metrics_by_category(results_path, top_k=args.top_k)
+    metrics_by_category.to_csv(metrics_by_category_path, index=False)
+    print(f"Saved source metrics by category to {metrics_by_category_path}")
+
     ambiguous_report = compute_ambiguous_source_report(results_path, top_k=args.top_k)
     ambiguous_report.to_csv(ambiguous_report_path, index=False)
 
@@ -238,11 +269,15 @@ def main() -> None:
             "cache_path": str(cache_path),
             "data_dirs": DATA_DIRS,
             "number_loaded_source_documents": loaded_source_document_count,
+            "documents_by_source": documents_by_source,
             "number_indexed_chunks": indexed_chunk_count,
+            "chunks_by_source": chunks_by_source,
             "number_evaluation_questions": len(questions),
             "outputs": {
                 "retrieval_results": str(results_path),
                 "source_metrics": str(metrics_path),
+                "source_failures": str(source_failures_path),
+                "source_metrics_by_category": str(metrics_by_category_path),
                 "ambiguous_source_report": str(ambiguous_report_path),
                 "question_view_html": str(question_view_html_path),
                 "question_view_md": str(question_view_md_path),

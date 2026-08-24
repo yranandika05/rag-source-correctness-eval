@@ -144,6 +144,8 @@ Each run folder contains:
 
 - `retrieval_results.csv`: every retrieved chunk with method, rank, score, source, and preview.
 - `source_metrics.csv`: source-correctness metrics by method and `k`.
+- `source_failures.csv`: non-ambiguous question/method/k cases where top-k contains no chunk from the intended source.
+- `source_metrics_by_category.csv`: source-correctness metrics grouped by method, question category, and `k`.
 - `ambiguous_source_report.csv`: retrieved-source distribution for ambiguous questions.
 - `config.json`: run settings, cache path, corpus stats, and output paths.
 - `question_view.html`: human-readable question-level analysis view.
@@ -211,6 +213,8 @@ Rows whose `intended_source` is `Ambiguous` are excluded from source-correctness
 > Across all top-k retrieved chunks, what fraction came from the wrong source?
 
 These are intentionally source-level metrics. They do not yet evaluate whether the exact paragraph is correct, only whether retrieval points to the intended documentation source.
+
+`source_failures.csv` lists the specific non-ambiguous questions where a method fails to retrieve any chunk from the intended source within top-k. `source_metrics_by_category.csv` makes it easier to compare retrieval behavior across explicit, terminology-specific, and paraphrased questions.
 
 `ambiguous_source_report.csv` reports the retrieved-source distribution for intentionally ambiguous queries by method and `k`.
 

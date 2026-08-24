@@ -1,17 +1,51 @@
 question_id,question,intended_source,category
-1,How do you create a new repository in GitHub?,GitHub,explicit_source
-2,What is a merge request in GitLab?,GitLab,explicit_source
-3,How do you add collaborators on GitHub?,GitHub,explicit_source
-4,How can I configure CI/CD pipelines in GitLab?,GitLab,explicit_source
-5,Where do I invite users by GitHub username?,GitHub,source_specific_terminology
-6,Which platform uses a .gitlab-ci.yml file for pipeline configuration?,GitLab,source_specific_terminology
-7,Which documentation explains New repository creation?,GitHub,source_specific_terminology
-8,Which documentation describes reviewers approving proposed branch changes?,GitLab,source_specific_terminology
-9,How can I start a new hosted code project?,GitHub,paraphrased
-10,How do I request that changes from one branch be reviewed before merging?,GitLab,paraphrased
-11,How do I let another person access my project?,GitHub,paraphrased
-12,How do I define jobs that run after commits or schedules?,GitLab,paraphrased
-13,How do I create a new project or repository?,Ambiguous,ambiguous_cross_source
-14,How do I manage access for other users?,Ambiguous,ambiguous_cross_source
-15,How does code review before merging work?,Ambiguous,ambiguous_cross_source
-16,How are automated checks configured for a repository?,Ambiguous,ambiguous_cross_source
+E01,How do I create a new repository in GitHub?,GitHub,explicit_source
+E02,How do I create a pull request in GitHub?,GitHub,explicit_source
+E03,How do I configure GitHub Actions for a repository?,GitHub,explicit_source
+E04,How do I add collaborators to a GitHub repository?,GitHub,explicit_source
+E05,How do I protect a branch in GitHub?,GitHub,explicit_source
+E06,How do I require reviews before merging in GitHub?,GitHub,explicit_source
+E07,How do I create an issue template in GitHub?,GitHub,explicit_source
+E08,How do I create a project in GitLab?,GitLab,explicit_source
+E09,How do I create a merge request in GitLab?,GitLab,explicit_source
+E10,How do I configure GitLab CI/CD for a project?,GitLab,explicit_source
+E11,How do I invite members to a GitLab project?,GitLab,explicit_source
+E12,How do I protect a branch in GitLab?,GitLab,explicit_source
+E13,How do I require approvals for a GitLab merge request?,GitLab,explicit_source
+E14,How do I create an issue board in GitLab?,GitLab,explicit_source
+E15,How do I manage GitLab project visibility settings?,GitLab,explicit_source
+T01,How do I create a pull request from a branch?,GitHub,source_specific_terminology
+T02,How do I write a GitHub Actions workflow file?,GitHub,source_specific_terminology
+T03,How do I use CODEOWNERS to request reviews?,GitHub,source_specific_terminology
+T04,How do I configure protected branches with required status checks?,GitHub,source_specific_terminology
+T05,How do I set repository secrets for GitHub Actions?,GitHub,source_specific_terminology
+T06,How do I use Dependabot alerts for vulnerable dependencies?,GitHub,source_specific_terminology
+T07,How do I publish a package with GitHub Packages?,GitHub,source_specific_terminology
+T08,How do I create a merge request from a source branch?,GitLab,source_specific_terminology
+T09,How do I define jobs in a .gitlab-ci.yml file?,GitLab,source_specific_terminology
+T10,How do I configure GitLab CI/CD pipeline stages?,GitLab,source_specific_terminology
+T11,How do I use pipeline schedules in GitLab?,GitLab,source_specific_terminology
+T12,How do I set CI/CD variables for a GitLab project?,GitLab,source_specific_terminology
+T13,How do I configure merge request approval rules?,GitLab,source_specific_terminology
+T14,How do I use GitLab protected environments?,GitLab,source_specific_terminology
+T15,How do I create a GitLab project access token?,GitLab,source_specific_terminology
+P01,How can I automatically run tests when code is pushed?,GitHub,paraphrased
+P02,How can I stop changes from being merged until checks pass?,GitHub,paraphrased
+P03,How can I choose who should review changes in a repository?,GitHub,paraphrased
+P04,How can I give another person access to my code repository?,GitHub,paraphrased
+P05,How can I store credentials for automation without putting them in code?,GitHub,paraphrased
+P06,How can I run build jobs after commits are pushed?,GitLab,paraphrased
+P07,How can I make sure changes are approved before they are merged?,GitLab,paraphrased
+P08,How can I limit who can push to important branches?,GitLab,paraphrased
+P09,How can I organize work items on a board?,GitLab,paraphrased
+P10,How can I run a deployment only after a pipeline succeeds?,GitLab,paraphrased
+A01,How can I protect a branch from direct pushes?,Ambiguous,ambiguous_cross_source
+A02,How do I require code review before merging changes?,Ambiguous,ambiguous_cross_source
+A03,How do I configure automated checks for a repository?,Ambiguous,ambiguous_cross_source
+A04,How do I invite another user to collaborate on a project?,Ambiguous,ambiguous_cross_source
+A05,How do I create a new hosted code project?,Ambiguous,ambiguous_cross_source
+A06,How do I manage repository visibility?,Ambiguous,ambiguous_cross_source
+A07,How do I create and track issues for development work?,Ambiguous,ambiguous_cross_source
+A08,How do I store secret values for CI jobs?,Ambiguous,ambiguous_cross_source
+A09,How do I review changes proposed from another branch?,Ambiguous,ambiguous_cross_source
+A10,How do I schedule automation to run later?,Ambiguous,ambiguous_cross_source

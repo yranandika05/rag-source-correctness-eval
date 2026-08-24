@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from dataclasses import replace
 
 from haystack import Document, Pipeline
 from haystack.components.embedders import SentenceTransformersTextEmbedder
@@ -92,10 +93,12 @@ def hybrid_retrieve(
         combined_score = (bm25_weight * bm25_scores.get(doc_id, 0.0)) + (
             dense_weight * dense_scores.get(doc_id, 0.0)
         )
-        doc.score = combined_score
-        doc.meta["bm25_normalized_score"] = bm25_scores.get(doc_id, 0.0)
-        doc.meta["dense_normalized_score"] = dense_scores.get(doc_id, 0.0)
-        scored_docs.append(doc)
+        meta = {
+            **doc.meta,
+            "bm25_normalized_score": bm25_scores.get(doc_id, 0.0),
+            "dense_normalized_score": dense_scores.get(doc_id, 0.0),
+        }
+        scored_docs.append(replace(doc, score=combined_score, meta=meta))
 
     scored_docs.sort(key=lambda doc: float(doc.score or 0.0), reverse=True)
     return scored_docs[:top_k]

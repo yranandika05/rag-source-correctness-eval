@@ -67,6 +67,99 @@ def compute_source_metrics(results_path: str | Path, top_k: int = 5) -> pd.DataF
     return pd.DataFrame(metric_rows).sort_values(["method", "k"])
 
 
+def compute_source_failures(results_path: str | Path, top_k: int = 5) -> pd.DataFrame:
+    """Report questions where top-k retrieval contains no chunk from the intended source."""
+    results = pd.read_csv(results_path)
+    if results.empty:
+        return pd.DataFrame()
+
+    missing = set(RESULT_COLUMNS) - set(results.columns)
+    if missing:
+        raise ValueError(f"Results file is missing columns: {sorted(missing)}")
+
+    results = results[results["intended_source"] != "Ambiguous"].copy()
+    if results.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for method, method_rows in results.groupby("method"):
+        for question_id, question_rows in method_rows.groupby("question_id"):
+            question_rows = question_rows.sort_values("rank")
+            first_row = question_rows.iloc[0]
+
+            for k in range(1, top_k + 1):
+                top_rows = question_rows[question_rows["rank"] <= k]
+                has_intended_source = (top_rows["retrieved_source"] == first_row["intended_source"]).any()
+                if has_intended_source:
+                    continue
+
+                rows.append(
+                    {
+                        "method": method,
+                        "k": k,
+                        "question_id": question_id,
+                        "question": first_row["question"],
+                        "category": first_row["category"],
+                        "intended_source": first_row["intended_source"],
+                        "retrieved_sources_in_top_k": "|".join(top_rows["retrieved_source"].fillna("").astype(str)),
+                        "top_1_source": first_row["retrieved_source"],
+                        "top_1_score": first_row["score"],
+                        "top_1_preview": first_row["text_preview"],
+                    }
+                )
+
+    columns = [
+        "method",
+        "k",
+        "question_id",
+        "question",
+        "category",
+        "intended_source",
+        "retrieved_sources_in_top_k",
+        "top_1_source",
+        "top_1_score",
+        "top_1_preview",
+    ]
+    return pd.DataFrame(rows, columns=columns).sort_values(["method", "k", "question_id"])
+
+
+def compute_source_metrics_by_category(results_path: str | Path, top_k: int = 5) -> pd.DataFrame:
+    """Compute source-correctness metrics grouped by method, category, and k."""
+    results = pd.read_csv(results_path)
+    if results.empty:
+        return pd.DataFrame()
+
+    missing = set(RESULT_COLUMNS) - set(results.columns)
+    if missing:
+        raise ValueError(f"Results file is missing columns: {sorted(missing)}")
+
+    results = results[results["intended_source"] != "Ambiguous"].copy()
+    if results.empty:
+        return pd.DataFrame()
+
+    metric_rows = []
+    for (method, category), group_rows in results.groupby(["method", "category"]):
+        for k in range(1, top_k + 1):
+            top_rows = group_rows[group_rows["rank"] <= k].copy()
+            top_rows["is_correct_source"] = top_rows["retrieved_source"] == top_rows["intended_source"]
+
+            per_question = top_rows.groupby("question_id")["is_correct_source"].any()
+            source_accuracy = per_question.mean() if not per_question.empty else 0.0
+            wrong_source_rate = 1.0 - top_rows["is_correct_source"].mean() if not top_rows.empty else 0.0
+
+            metric_rows.append(
+                {
+                    "method": method,
+                    "category": category,
+                    "k": k,
+                    "source_accuracy_at_k": round(float(source_accuracy), 4),
+                    "wrong_source_rate_at_k": round(float(wrong_source_rate), 4),
+                }
+            )
+
+    return pd.DataFrame(metric_rows).sort_values(["method", "category", "k"])
+
+
 def compute_ambiguous_source_report(results_path: str | Path, top_k: int = 5) -> pd.DataFrame:
     """Report retrieved source distribution for intentionally ambiguous queries."""
     results = pd.read_csv(results_path)
