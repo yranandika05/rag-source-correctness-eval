@@ -1,51 +1,114 @@
 # RAG Source Correctness Evaluation
 
-Experimental retrieval evaluation code for the paper:
+This repository contains the retrieval experiment used to study source
+correctness across GitHub Docs and GitLab Docs. The main question is
+whether retrieval returns chunks from the intended documentation source
+when both corpora are indexed together.
 
-**Evaluating Source Correctness in Retrieval-Augmented Generation over Similar Technical Documentation Sources**
-
-This repository investigates a narrow but important RAG failure mode: retrieving from the wrong source when two documentation collections are semantically and stylistically similar. The current experiment compares GitHub Docs and GitLab Docs.
-
-## Overview
-
-This is not a production chatbot. The main goal is to evaluate whether retrieval returns chunks from the intended documentation source before any answer generation step is added.
-
-The prototype uses Haystack 2.30 for:
-
-- `Document` objects
-- document metadata
-- indexing pipelines
-- chunking
-- in-memory document storage
-- BM25 and dense retrieval pipelines
-
-The evaluated documentation collections are:
-
-- GitHub Docs content in `data/github_docs/content/`
-- GitLab product docs in `data/gitlab_docs/doc/`
-
-Generation is intentionally optional because generation can hide retrieval errors. The retrieval output is saved as CSV so each retrieved chunk can be inspected directly.
+The experiment focuses only on retrieval. It does not generate RAG
+answers or evaluate answer correctness.
 
 ## Research Question
 
-When a RAG system searches across two similar technical documentation sources, how often does it retrieve chunks from the intended source?
+How do different retrieval strategies affect source correctness in RAG-based question answering over similar technical documentation sources?
 
-This project focuses on source correctness rather than answer fluency. For example, if a question asks about GitHub but the retriever returns a GitLab chunk, that is counted as a source-level retrieval error even if the text sounds plausible.
+The main failure mode of interest is source confusion. For example, if a question is intended for GitHub Docs but the top retrieved chunks come from GitLab Docs, this is treated as a source-level retrieval error even if the retrieved text is topically related.
 
-## Project Structure
+## Experimental Setup
 
-- `load_documents.py` loads local Markdown/text files as Haystack `Document` objects.
-- `indexing_pipeline.py` splits, embeds, and stores documents using a Haystack indexing pipeline.
-- `retrievers.py` contains BM25, dense, hybrid, and metadata-aware retrieval functions.
-- `evaluate.py` reads questions, saves detailed retrieval results, and computes source metrics.
-- `reporting.py` creates run folders, saves run config, and generates question-level analysis views.
-- `run_experiment.py` orchestrates the full experiment.
-- `evaluation_questions.csv` contains the evaluation set.
-- `results/` is created when you run the experiment and is ignored by Git.
+## Experimental Setup
+
+The code expects local documentation files under:
+
+```text
+data/github_docs/content/
+data/gitlab_docs/doc/
+
+`load_documents.py` loads `.md`, `.mdx`, and `.txt` files from those directories as Haystack `Document` objects. Each loaded document receives metadata for `source`, `file_path`, and `section_title`. The source is inferred from the file path as `GitHub`, `GitLab`, or `Unknown`.
+
+The indexing pipeline uses Haystack's `DocumentSplitter` with word-based chunking. The default settings in `run_experiment.py` are:
+
+```text
+split_by: word
+split_length: 250
+split_overlap: 50
+embedding_model: sentence-transformers/all-MiniLM-L6-v2
+top_k: 5
+```
+
+The in-memory document store is created with cosine embedding similarity. In the recorded `baseline_50q_analysis` run, the indexed corpus contains 42,662 chunks:
+
+```text
+GitHub: 13,813 chunks
+GitLab: 28,849 chunks
+```
+
+The raw documentation directories and generated index cache are ignored by Git.
+
+## Retrieval Methods
+
+The experiment compares four retrieval methods defined in `retrievers.py`.
+
+`bm25` is the lexical baseline. It uses Haystack's `InMemoryBM25Retriever` without custom BM25 scoring changes.
+
+`dense` embeds the query with `SentenceTransformersTextEmbedder` and retrieves from pre-embedded document chunks using Haystack's `InMemoryEmbeddingRetriever`. The default model is `sentence-transformers/all-MiniLM-L6-v2`, and the document store uses cosine similarity.
+
+`hybrid` retrieves candidates from both BM25 and dense retrieval. It requests twice the final retrieval depth from each retriever, min-max normalizes BM25 and dense scores separately, combines the normalized scores with equal weights, and reranks the combined candidate set by the resulting score. This is not Reciprocal Rank Fusion.
+
+`metadata_aware` is a source-constrained hybrid variant. It detects literal occurrences of `GitHub` or `GitLab` in the query. If either platform name is present, it applies a hard filter on `meta.source` before running hybrid retrieval. If neither name is present, it falls back to ordinary unfiltered hybrid retrieval.
+
+
+## Evaluation
+
+The evaluation set is stored in `evaluation_questions.csv` and contains
+50 manually constructed questions:
+
+- 15 explicit-source queries
+- 15 terminology-oriented queries
+- 10 paraphrased queries
+- 10 ambiguous cross-source queries
+
+Forty questions have an intended source:
+
+- GitHub: 19
+- GitLab: 21
+
+The remaining ten questions have no single intended source and are marked
+as `Ambiguous`.
+
+`Source Accuracy@k` measures whether at least one chunk from the intended
+source appears within the top-k results.
+
+`Wrong Source Rate@k` measures the fraction of retrieved top-k chunks
+that originate from the other documentation source.
+
+Ambiguous questions are excluded from these two metrics and are analyzed
+separately through retrieved-source distributions.
+
+These are source-level retrieval metrics. They do not measure the
+semantic relevance of individual chunks or the correctness of a
+generated answer.
+
+## Repository Structure
+
+```text
+load_documents.py          Load local Markdown/text documentation as Haystack Documents.
+indexing_pipeline.py       Split, embed, and write documents into an in-memory store.
+retrievers.py              BM25, dense, hybrid, and metadata-aware retrieval functions.
+evaluate.py                Load questions, save retrieval results, and compute metrics.
+reporting.py               Create run folders, save config, and generate question views.
+cache_utils.py             Save and load cached indexed Haystack Documents.
+run_experiment.py          Orchestrate indexing, retrieval, evaluation, and reporting.
+evaluation_questions.csv   The 50-question evaluation set.
+requirements.txt           Python dependencies.
+scripts/fetch_data.sh      Sparse-clone helper for GitHub Docs and GitLab Docs.
+```
+
+Generated directories such as `results/`, `storage/`, and the local documentation directories under `data/` are ignored by Git.
 
 ## Setup
 
-Use a clean virtual environment. If your environment already has `farm-haystack` installed, remove it first because that is Haystack 1.x and uses different imports.
+Use a clean Python environment. If an old Haystack 1.x package is installed, remove it before installing this project's dependencies.
 
 ```bash
 python3 -m venv .venv
@@ -54,197 +117,62 @@ pip uninstall -y farm-haystack haystack-ai
 pip install --upgrade -r requirements.txt
 ```
 
-The main dependency is pinned to:
+The dependency file currently pins:
 
 ```text
 haystack-ai==2.30.0
+sentence-transformers==5.5.1
+pandas==3.0.3
+tqdm==4.67.1
 pydantic>=2.7,<3
 ```
 
-As of June 8, 2026, PyPI lists `haystack-ai` 2.30.0 as a stable release published on June 3, 2026.
-
 ## Data
 
-Add `.md`, `.mdx`, or `.txt` files under:
+You can place compatible documentation files manually under the expected directories, or use the helper script:
+
+```bash
+bash scripts/fetch_data.sh
+```
+
+The script creates `data/`, sparse-clones the upstream repositories, and checks out the documentation subdirectories expected by the loader:
 
 ```text
-data/github_docs/content/
-data/gitlab_docs/doc/
+https://github.com/github/docs.git       -> data/github_docs/content/
+https://gitlab.com/gitlab-org/gitlab.git -> data/gitlab_docs/doc/
 ```
 
-Each file becomes a Haystack `Document` with metadata:
+The repository does not pin upstream documentation commit hashes, so exact corpus-version reproducibility depends on the local data snapshot used for a run.
 
-- `source`: `GitHub` or `GitLab`
-- `file_path`: local file path
-- `section_title`: first Markdown heading, when available
+## Running the Experiment
 
-The indexing pipeline then splits those documents into chunks. Haystack copies the metadata onto the chunks and adds its own split metadata such as `source_id` and `split_id`.
-
-## Evaluation Questions
-
-`evaluation_questions.csv` must contain:
-
-```csv
-question_id,question,intended_source,category
-```
-
-Example:
-
-```csv
-1,How do you create a new repository in GitHub?,GitHub,repository management
-```
-
-## Run
+Run the experiment with:
 
 ```bash
 python run_experiment.py
 ```
 
-By default, each experiment writes to a new run folder:
-
-```text
-results/run_001/
-results/run_002/
-results/run_003/
-```
-
-Use `--run-name` to choose a stable folder name:
-
+Without a run name, outputs are written to incrementing directories such as 
 ```bash
-python run_experiment.py --run-name baseline_40q
+results/run_001/ and results/run_002/.
 ```
-
-This writes outputs under:
-
-```text
-results/baseline_40q/
-```
-
-Existing named run folders are protected from accidental overwrites. Use
-`--overwrite-run` only when you intentionally want to replace files in that run:
-
+A named run can be created with:
 ```bash
-python run_experiment.py --run-name baseline_40q --overwrite-run
+python run_experiment.py --run-name baseline_50q
 ```
-
-Optional settings:
-
+To intentionally replace an existing named run:
 ```bash
-python run_experiment.py \
-  --run-name baseline_top5 \
-  --top-k 5 \
-  --split-length 250 \
-  --split-overlap 50 \
-  --max-files-per-source 100 \
-  --embedding-model sentence-transformers/all-MiniLM-L6-v2 \
-  --rebuild-index
+python run_experiment.py --run-name baseline_50q --overwrite-run
 ```
-
-Each run folder contains:
-
-- `retrieval_results.csv`: every retrieved chunk with method, rank, score, source, and preview.
-- `source_metrics.csv`: source-correctness metrics by method and `k`.
-- `source_failures.csv`: non-ambiguous question/method/k cases where top-k contains no chunk from the intended source.
-- `source_metrics_by_category.csv`: source-correctness metrics grouped by method, question category, and `k`.
-- `ambiguous_source_report.csv`: retrieved-source distribution for ambiguous questions.
-- `config.json`: run settings, cache path, corpus stats, and output paths.
-- `question_view.html`: human-readable question-level analysis view.
-- `question_view.md`: Markdown version of the question-level view.
-
-Open `question_view.html` in a browser to inspect results grouped by question.
-For non-ambiguous questions, retrieved chunks from the wrong source are marked
-`WRONG SOURCE`. For intentionally ambiguous questions, the view reports source
-distribution instead of treating either source as wrong.
-
-To compare experiment runs, compare the `source_metrics.csv` files in their run
-folders, for example:
-
-```text
-results/run_001/source_metrics.csv
-results/run_002/source_metrics.csv
-results/baseline_40q/source_metrics.csv
-```
-
-## Local Index Cache
-
-Raw documentation files are local experiment data and are ignored by Git:
-
-- `data/github_docs/`
-- `data/gitlab_docs/`
-
-After indexing, chunked Haystack `Document` objects are cached under:
-
-```text
-storage/
-```
-
-The cache stores chunk text, metadata, Haystack split metadata, and embeddings. `storage/` is ignored by Git because cached embeddings are generated artifacts and can become large.
-
-Cache filenames depend on indexing settings:
-
-- embedding model
-- split length
-- split overlap
-- `max_files_per_source`
-
-Use `--rebuild-index` when raw documents, chunking settings, file limits, or the embedding model change:
-
+Additional options can be inspected with:
 ```bash
-python run_experiment.py --rebuild-index
+python run_experiment.py --help
 ```
+Use ```--rebuild-index``` when the underlying documentation files have
+changed and the cached index should not be reused.
 
-## Retrieval Methods
 
-- `bm25`: keyword retrieval using `InMemoryBM25Retriever`.
-- `dense`: embedding retrieval using `SentenceTransformersTextEmbedder` and `InMemoryEmbeddingRetriever`.
-- `hybrid`: retrieves with both BM25 and dense retrieval, normalizes scores per method, then combines them.
-- `metadata_aware`: if a query explicitly contains `GitHub` or `GitLab`, it applies a source metadata filter before running hybrid retrieval.
 
-## Metrics
+## Notes and Limitations
 
-Rows whose `intended_source` is `Ambiguous` are excluded from source-correctness metrics and reported separately.
-
-`Source Accuracy@k` answers:
-
-> For each question, did at least one of the top-k retrieved chunks come from the intended source?
-
-`Wrong Source Rate@k` answers:
-
-> Across all top-k retrieved chunks, what fraction came from the wrong source?
-
-These are intentionally source-level metrics. They do not yet evaluate whether the exact paragraph is correct, only whether retrieval points to the intended documentation source.
-
-`source_failures.csv` lists the specific non-ambiguous questions where a method fails to retrieve any chunk from the intended source within top-k. `source_metrics_by_category.csv` makes it easier to compare retrieval behavior across explicit, terminology-specific, and paraphrased questions.
-
-`ambiguous_source_report.csv` reports the retrieved-source distribution for intentionally ambiguous queries by method and `k`.
-
-## Why This Design
-
-The experiment keeps the pipeline small and inspectable:
-
-- local Markdown/text documents only
-- no UI
-- no agents
-- no authentication
-- no deployment layer
-- no required LLM generation
-
-By saving every retrieved chunk with source, rank, score, and text preview, you can inspect whether failures come from lexical ambiguity, semantic similarity between GitHub/GitLab docs, chunking choices, or source metadata handling.
-
-## Suggested Repository Name
-
-Recommended GitHub repository name:
-
-```text
-rag-source-correctness-eval
-```
-
-Other reasonable options:
-
-- `source-correctness-rag`
-- `technical-docs-rag-evaluation`
-- `github-gitlab-rag-source-eval`
-
-## Status
-
-This is an experimental university NLP project and a research prototype for portfolio use. The code prioritizes clarity and reproducibility over production features.
+This is a research prototype for retrieval evaluation. The document store is in memory, the corpus is loaded from local files, and generated outputs are not committed. The evaluation checks whether retrieval points to the intended documentation source; it does not verify whether the retrieved paragraph is the best supporting evidence for an answer.
